@@ -1,0 +1,9 @@
+{
+  "name": "MatchLogic Marketplace",
+  "description": "Tinder-style discovery for Properties, Vehicles, and Jobs with AI-powered matchmaking.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}
