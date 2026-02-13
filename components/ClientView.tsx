@@ -9,6 +9,12 @@ interface ClientViewProps {
   isSidebarOpen: boolean;
   toggleSidebar: () => void;
   onChatClick: () => void;
+  /** Listings arriving from Supabase Realtime. Merged with mock data for the feed. */
+  realtimeListings?: Listing[];
+  /** A listing that was just published by another user (for toast notification). */
+  newListingAlert?: Listing | null;
+  /** Dismiss the new-listing toast. */
+  onDismissAlert?: () => void;
 }
 
 const MOCK_DATA: Record<ListingCategory, Listing[]> = {
@@ -94,7 +100,7 @@ const MOCK_DATA: Record<ListingCategory, Listing[]> = {
   ]
 };
 
-const ClientView: React.FC<ClientViewProps> = ({ activeCategory, setCategory, isSidebarOpen, toggleSidebar, onChatClick }) => {
+const ClientView: React.FC<ClientViewProps> = ({ activeCategory, setCategory, isSidebarOpen, toggleSidebar, onChatClick, realtimeListings = [], newListingAlert, onDismissAlert }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [swipeDirection, setSwipeDirection] = useState<'like' | 'nope' | null>(null);
   const [isDetailExpanded, setIsDetailExpanded] = useState(false);
@@ -113,7 +119,13 @@ const ClientView: React.FC<ClientViewProps> = ({ activeCategory, setCategory, is
   const [hasReturnedThisTurn, setHasReturnedThisTurn] = useState(false);
 
   const filteredBase = useMemo(() => {
-    let base = MOCK_DATA[activeCategory] || [];
+    const mockBase = MOCK_DATA[activeCategory] || [];
+    // Merge realtime listings for this category (placed first so new ones appear at top)
+    const realtimeForCategory = realtimeListings.filter(l => l.category === activeCategory);
+    const mockIds = new Set(mockBase.map(l => l.id));
+    const deduped = realtimeForCategory.filter(l => !mockIds.has(l.id));
+    let base = [...deduped, ...mockBase];
+
     if (!aiFilters) return base;
     return base.filter(l => {
       if (aiFilters.maxPrice) {
@@ -124,7 +136,7 @@ const ClientView: React.FC<ClientViewProps> = ({ activeCategory, setCategory, is
         return false;
       }
       if (aiFilters.tags && aiFilters.tags.length > 0) {
-        const hasTag = aiFilters.tags.some(tag => 
+        const hasTag = aiFilters.tags.some(tag =>
           l.tags.some(t => t.toLowerCase().includes(tag.toLowerCase())) ||
           l.title.toLowerCase().includes(tag.toLowerCase())
         );
@@ -132,7 +144,7 @@ const ClientView: React.FC<ClientViewProps> = ({ activeCategory, setCategory, is
       }
       return true;
     });
-  }, [activeCategory, aiFilters]);
+  }, [activeCategory, aiFilters, realtimeListings]);
 
   const currentListings = useMemo(() => {
     if (rankedIds.length === 0) return filteredBase;
@@ -334,6 +346,25 @@ const ClientView: React.FC<ClientViewProps> = ({ activeCategory, setCategory, is
 
   return (
     <div className="h-full w-full flex flex-col items-center bg-[#0a0a0c] overflow-hidden relative">
+      {/* Realtime new-listing toast notification */}
+      {newListingAlert && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[100] w-full max-w-[440px] px-4 animate-in fade-in slide-in-from-top-4 duration-500">
+          <div className="bg-[#1c1c21] border border-[#ff4d00]/30 rounded-3xl p-4 shadow-2xl shadow-orange-600/10 flex items-center gap-4">
+            <div className="w-14 h-14 rounded-2xl overflow-hidden flex-shrink-0 border border-white/10">
+              <img src={newListingAlert.image} className="w-full h-full object-cover" alt="" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[8px] font-black text-[#ff4d00] uppercase tracking-widest mb-1">New listing just dropped</p>
+              <p className="text-white font-bold text-sm truncate">{newListingAlert.title}</p>
+              <p className="text-slate-500 text-[10px] font-bold truncate">{newListingAlert.location} &middot; {newListingAlert.price}</p>
+            </div>
+            <button onClick={onDismissAlert} className="p-2 text-slate-600 hover:text-white transition-colors flex-shrink-0">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="w-full max-w-[480px] px-6 pt-6 flex flex-col gap-4 z-50">
         <div className="flex gap-4 items-center">
           {!isSidebarOpen && (

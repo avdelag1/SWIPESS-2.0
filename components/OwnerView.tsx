@@ -2,11 +2,14 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { ListingCategory, TransactionType, Listing, ClientProfile } from '../types';
 import { GeminiService } from '../services/geminiService';
+import { publishListing } from '../services/listingService';
 
 interface OwnerViewProps {
   onBack?: () => void;
   isSidebarOpen?: boolean;
   toggleSidebar?: () => void;
+  /** Called after a listing is successfully published so the realtime hook can optimistically add it. */
+  onListingPublished?: (listing: Listing) => void;
 }
 
 const MOCK_CLIENTS: ClientProfile[] = [
@@ -15,7 +18,7 @@ const MOCK_CLIENTS: ClientProfile[] = [
   { id: 'c3', name: 'Erik Nilsson', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=800&h=800&fit=crop', bio: 'Full-stack developer looking for a Senior React Architect to audit a core project. Focused on performance and scalability.', lookingFor: ListingCategory.TASKER, budget: '€100/hr', location: 'BERLIN, GERMANY', reliabilityScore: 95 }
 ];
 
-const OwnerView: React.FC<OwnerViewProps> = ({ onBack, isSidebarOpen, toggleSidebar }) => {
+const OwnerView: React.FC<OwnerViewProps> = ({ onBack, isSidebarOpen, toggleSidebar, onListingPublished }) => {
   const [viewState, setViewState] = useState<'dashboard' | 'create' | 'swipe'>('swipe');
   const [isGenerating, setIsGenerating] = useState(false);
   const [swipeIndex, setSwipeIndex] = useState(0);
@@ -124,7 +127,9 @@ const OwnerView: React.FC<OwnerViewProps> = ({ onBack, isSidebarOpen, toggleSide
     setFormData(prev => ({ ...prev, features: (prev.features || []).filter((_, i) => i !== index) }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [isPublishing, setIsPublishing] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const finalListing: Listing = {
       ...formData as Listing,
@@ -134,7 +139,20 @@ const OwnerView: React.FC<OwnerViewProps> = ({ onBack, isSidebarOpen, toggleSide
       skills: skillsInput.split(',').map(s => s.trim()).filter(s => s !== ''),
       ownerId: 'dev'
     };
+
+    // Add to local state immediately
     setMyListings(prev => [finalListing, ...prev]);
+
+    // Persist to Supabase (fires realtime event for all other clients)
+    setIsPublishing(true);
+    const persisted = await publishListing(finalListing);
+    setIsPublishing(false);
+
+    if (persisted) {
+      // Notify parent so the realtime hook marks this listing as known (avoids echo)
+      onListingPublished?.(persisted);
+    }
+
     setViewState('dashboard');
     setFormData({ category: ListingCategory.PROPERTY, features: [], tags: [] });
     setAiDraftInput(''); setTagsInput(''); setSkillsInput(''); setFeatureInput('');
@@ -305,7 +323,9 @@ const OwnerView: React.FC<OwnerViewProps> = ({ onBack, isSidebarOpen, toggleSide
           </div>
         </div>
         <div className="space-y-4"><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Description</label><textarea required value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} placeholder="AI generated description..." className="w-full bg-[#16161a] border border-white/10 rounded-[3rem] px-10 py-10 text-sm text-white min-h-[200px] resize-none focus:outline-none shadow-xl leading-relaxed" /></div>
-        <button type="submit" className="w-full py-9 bg-white text-black font-black rounded-[3rem] uppercase tracking-[0.3em] text-[13px] shadow-2xl active:scale-[0.98] transition-all mt-10 hover:bg-slate-100">Publish Listing</button>
+        <button type="submit" disabled={isPublishing} className="w-full py-9 bg-white text-black font-black rounded-[3rem] uppercase tracking-[0.3em] text-[13px] shadow-2xl active:scale-[0.98] transition-all mt-10 hover:bg-slate-100 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-4">
+              {isPublishing ? (<><div className="w-5 h-5 border-3 border-black border-t-transparent rounded-full animate-spin"></div>Publishing...</>) : 'Publish Listing'}
+            </button>
       </form>
     </div>
   );

@@ -13,6 +13,7 @@ import Auth from './components/Auth';
 import ConnectionGuide from './components/ConnectionGuide';
 import { supabase, isSupabaseConfigured } from './services/supabaseClient';
 import { DashboardMode, ListingCategory, AppView } from './types';
+import { useRealtimeListings } from './hooks/useRealtimeListings';
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>({
@@ -36,6 +37,8 @@ const App: React.FC = () => {
   const [category, setCategory] = useState<ListingCategory>(ListingCategory.PROPERTY);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
+
+  const { listings: realtimeListings, newListingAlert, dismissAlert, addListing } = useRealtimeListings();
 
   const isConfigured = isSupabaseConfigured();
 
@@ -76,18 +79,21 @@ const App: React.FC = () => {
     }
 
     if (mode === DashboardMode.OWNER) {
-      return <OwnerView onBack={handleBack} />;
+      return <OwnerView onBack={handleBack} onListingPublished={addListing} />;
     }
 
     switch (activeView) {
       case AppView.DISCOVERY:
         return (
-          <ClientView 
-            activeCategory={category} 
+          <ClientView
+            activeCategory={category}
             setCategory={setCategory}
-            isSidebarOpen={isSidebarOpen} 
-            toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} 
+            isSidebarOpen={isSidebarOpen}
+            toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
             onChatClick={() => setActiveView(AppView.CHAT)}
+            realtimeListings={realtimeListings}
+            newListingAlert={newListingAlert}
+            onDismissAlert={dismissAlert}
           />
         );
       case AppView.CHAT:
@@ -101,7 +107,7 @@ const App: React.FC = () => {
       case AppView.GITHUB:
         return <GithubRepoView session={session} onBack={handleBack} />;
       default:
-        return <ClientView activeCategory={category} setCategory={setCategory} isSidebarOpen={isSidebarOpen} toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} onChatClick={() => setActiveView(AppView.CHAT)} />;
+        return <ClientView activeCategory={category} setCategory={setCategory} isSidebarOpen={isSidebarOpen} toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} onChatClick={() => setActiveView(AppView.CHAT)} realtimeListings={realtimeListings} newListingAlert={newListingAlert} onDismissAlert={dismissAlert} />;
     }
   };
 
